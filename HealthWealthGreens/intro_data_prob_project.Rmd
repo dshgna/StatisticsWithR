@@ -1,0 +1,360 @@
+---
+title: "Exploring the BRFSS data: Health, Wealth and the Greens"
+author: "WTG Dulshani"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+## Overview
+
+*In this analysis I use data from the Behavioral Risk Factor Surveillance System (BRFSS) to explore the relationships between income, health and the consumption of fruits and vegetables of non-institutionalized adults in the United States of America.*
+
+* * *
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(RColorBrewer)
+```
+
+### Load data
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+* * *
+
+
+## Part 1: Data
+
+The Behavioral Risk Factor Surveillance System (BRFSS) survey 2013 consists of 491,775 observations collected from a sample of non-institutionalized adults (18 years of age and older) from 50 states, the district of Columbia, and the territories of Puerto Rico and Guam of the United States of America. Observations were collected by means of telephone(both mobile and landline) surveys with random participants chosen using Random Digit Dialing (RDD). 
+
+An estimated 97.5% of US population had telephone services in 2012. The methodology used for sampling differed by the type of telephone service:
+
+1. Landline phones: Disproportionate stratified sampling was used, except in Guam and Puerto Rico which used simple random sampling 
+2. Mobile phones: Simple random sampling 
+
+**Based on the survey methodology described above, any inference obtained from this survey is generalizable but not causal for the non-institutionalized US adult population. i.e. the observations can be used to establish correlation but not causation.** 
+
+**Generalizable:** Random sampling is used for the data collection. The data collection method covers 97.5% of all households in all US states and territories. The participants are selected at random. 
+
+There are some caveats that should be kept in mind:
+
+1. The survey targets only 97.5% of all households based on their access to telephone services. This excludes households with no access to telephone services - which includes very low income and homeless groups as well as specific communities (e.g.Mormons) refraining from telephone services due to religious/social purposes. While the non-presence of these groups may reduce significant data points (e.g. low income groups may have lesser access to healthcare), this is a trade-off between efficiency vs economic feasibility (e.g.in-person interviews). Hence, despite this reservation, the observations can be said to hold true to the non-institutionalized adult US population at large.       
+2. The survey may have an incidence of Non Response Bias - while the respondents are selected at random, there may be a chance that these randomly selected respondents do not respond. However, due to the scale of the random sampling then the replacement for a non-response would be as equally random and we can conclude that this would not affect the randomness of the sample as a whole. 
+3. Missing data points: As per the variable Final Disposition in the codebook, 11.91% of the participants partially complete the main survey. This can result in missing values for some variables and conclusions drawn from variables with a large proportion of missing values should not be considered as generalizable. Some of the optional modules have extremely low response rates (e.g. Optional Module 16 'Reaction to Race' had 99.19% missing values) and cannot be said to be generalizable. 
+
+
+**Not causal:** No experiments are conducted on the participants in controlled settings, hence the observations are not obtained through randomly assignment and any inference does not indicate causality.   
+ 
+ References
+ 
+ * <https://www.cdc.gov/brfss/about/brfss_faq.htm>
+ * <https://www.cdc.gov/brfss/annual_data/2013/pdf/Overview_2013.pdf>
+
+* * *
+
+## Part 2: Research Questions
+
+### Research Question 1: Is there a relationship between health and income levels?
+
+Income level can be a predictor of a person's purchasing power, and it can be speculated that individuals with higher income levels are likelier to be healthier. For example: poverty can limit a person's ability to access goods and services that can contribute to general well-being. Poverty can also limit an individual's ability to seek medical treatment as the United States does not have a free healthcare system.
+
+Through this question, I analyze whether there is a correlation between an individual's self-reported general health and their income level. 
+
+**Variables**: general health (`genhlth`), income level(`_incomg`)
+
+
+### Research Question 2: Is there a relationship between health and fruit/vegetable consumption?
+
+Conventional wisdom holds that fruits/vegetables are essential components of a healthy diet. Through this question, I probe into whether this is upheld by data: do healthier people also eat more fruits/vegetables?  
+
+**Variables**: general health (`genhlth`), total number of fruits consumed per day(`_frutsum`), total of vegetables consumed per day(`_vegesum`)
+Additional variables used for data cleaning: fruit exclusion from analysis(`**_fruitex**`) and vegetable exclusion from analysis(`**_vegetex**`) 
+
+### Research Question 3: Is there a relationship between health, income level and fruit/vegetable consumption?
+
+In the final question, I tie together the results of the first two questions to establish whether there is a relationship between income, health and consumption of fruits/vegetables.
+
+**Variables**: general health (`genhlth`), total number of fruits consumed per day(`_frutsum`), total of vegetables consumed per day(`_vegesum`), income level(`X_incomg`)
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+### Research Question 1: Is there a relationship between health and income level?
+
+This question explores the relationship between two categorical variables: general health (`genhlth`) and income level(`_incomg`).
+
+#### Clean data
+
+```{r}
+#_incomeg is not present in the dataset, hence a grep search to identify the new name R has assigned to the variable while importing
+grep("incomg", names(brfss2013), value = TRUE)
+```
+
+```{r}
+#Remove all observations where either genhlth or X_incomg is null
+income_health <- brfss2013 %>%
+  filter(!is.na(genhlth), !is.na(X_incomg)) 
+
+#Change the default ordering of genhlth (i.e. in the original dataset 'Excellent' is the first value and 'Poor' is the last - I reverse the order for more intutive visualization)
+income_health$genhlth <- factor(income_health$genhlth, levels = c('Poor','Fair','Good','Very good','Excellent'))
+
+#Count of all observations 
+income_health %>%
+  summarise(num_observations=n())
+```
+
+
+#### Analyze data
+
+As I'm analyzing two categorical variables, I use a contingency table to count the number of observations falling into the different combinations of observations.
+
+```{r}
+income_health_table <- table(income_health$X_incomg, income_health$genhlth)
+print.table(addmargins(income_health_table))
+```
+
+In order to derive meaningful conclusions, counts cannot be compared in isolation,  but need to be compared relative to the total number of items in the category. For this purpose, I create a table of proportions to compare the proportional levels of health across different income groups.
+
+```{r}
+health_levels_by_income_prop <- prop.table(income_health_table, margin = 1) %>% 
+              as.data.frame.matrix() 
+  
+print.data.frame(health_levels_by_income_prop, digits = 2)
+```
+
+Reviewing the results of the contingency table, we can see that the proportion of people with better health increases with income levels. For example,
+* Around 17% of the 'Less than 15,000' income group rated their general health as 'Poor', with only around 1.5% in the '50,000 or more' income group rated their health as 'Poor'
+* Similarly the frequency of ratings of 'Very good' and higher increased with income levels: increasing from 25% in the 'Less than 15,000' income group to 70% in the '50,000 or more' income group.
+
+I use a relative frequency segmented bar plot to visualize the relationship between these two categorical variables.
+
+```{r fig.height=3.5}
+ggplot(data = income_health, aes(x = X_incomg, fill = genhlth)) +
+  geom_bar(position = position_fill(reverse = TRUE)) + 
+  labs(title ="Is there a relationship between Income and Health?", x = "Income Level", y="Relative Frequency of Health", fill = "General Health") +
+  scale_fill_brewer(palette = "RdYlGn") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+The plot visualizes the positive correlation between high income levels and high levels of general health: a greater proportion of people with higher income levels reported better levels of health.   
+
+This positive correlation between income levels and levels of general health could be indicative of any of the following:
+
+1. High income levels result in high levels of general health: people with higher levels of income are better able to afford higher quality of healthcare and also take better preventive measures
+2. High levels of general health indicate high levels of income: a person who suffers from continuous bad health would be unable to go to work and have low levels of productivity which in turn will affect income generation
+3. There is one/many confounding variables that affect both income and health: for example occupation could be a confounding variable where certain jobs such as factory work both have low income levels as well as expose an individual to hazards that have negative effects on health
+
+### Research Question 2: Is there a relationship between health and fruit/vegetable consumption?
+
+This question explores the relationship between one categorical and the sum of two numerical variables: general health(`genhlth`), the total number of fruits(`_frutsum`) and vegetables(`_vegesum`) consumed per day. 
+
+#### Clean data
+
+I use two calculated variables provided in the BRFSS data set for eliminating values that are out of the acceptable range. Values considered as out of range are:  
+
+* Fruits(`**_fruitex**`): more than 16/day
+* Vegetables(`**_vegetex**`): more than 23/day 
+
+```{r}
+#Find the name R has assigned to variables while importing
+grep("frutsum", names(brfss2013), value = TRUE)
+grep("vegesum", names(brfss2013), value = TRUE)
+grep("fruitex", names(brfss2013), value = TRUE)
+grep("vegetex", names(brfss2013), value = TRUE)
+```
+
+```{r}
+# Exclude out of range values
+fruit_vege_consumption <- income_health %>%
+  filter(X_fruitex == "No missing values and in accepted range", X_vegetex == "No missing values and in accepted range")
+```
+
+#### Analyze data
+
+As the first step, I create a new calculated variable: `fruit_vege_sum` which is the sum of `X_frutsum` and `X_vegesum` to calculate summary statistics. I noticed that the data for both `X_frutsum` and `X_vegesum` are provided as a multiple of 100, and rectified this in the calculation. 
+
+```{r}
+# Create new calculated variable and divide by 100 to rectify data
+fruit_vege_consumption <- fruit_vege_consumption %>%
+  mutate(fruit_vege_sum = X_frutsum/100 + X_vegesum/100) 
+
+fruit_vege_consumption %>% summarise(count=n(),
+            fruit_vege_min = min(fruit_vege_sum), 
+            fruit_vege_mean = mean(fruit_vege_sum),
+            fruit_vege_median = median(fruit_vege_sum), 
+            fruit_vege_sd = sd(fruit_vege_sum),
+            fruit_vege_IQR = IQR(fruit_vege_sum),
+            fruit_vege_Q1 = quantile(fruit_vege_sum, 0.25),
+            fruit_vege_Q3 = quantile(fruit_vege_sum, 0.75),
+            fruit_vege_max = max(fruit_vege_sum))
+```
+
+The data ranges between 0 to 35.29. The mean(3.3) is greater than the median(2.97), hence this seems to be a right-skewed distribution. 
+
+Next, let's plot the distributions to better observe the shape of the distribution.
+
+```{r}
+ggplot(data = fruit_vege_consumption, aes(x = fruit_vege_sum)) +
+  geom_histogram(binwidth = 1, color="darkgreen", fill="lightgreen") + 
+  labs(title ="Histogram for daily fruit/vegetable consumption", x = "Number of fruits/vegetables per day") 
+```
+
+Observing the shape of this distribution:
+
+* It is right skewed
+* It is unimodal
+
+As the distribution is right-skewed and not symmetrical, the robust summary statistics we should consider are:
+
+* Measures of center: Median - 2.97
+* Measures of center: Inter-Quartile Range(IQR) - 2.34 where Q1 = 1.94 and Q3 = 4.28
+
+Based on the shape of the distribution and summary statistics, we can say that, in general Americans consume nearly 3 (median=2.97) fruits/vegetables everyday, and the bulk of the daily fruits/vegetables consumption ranges between 1.94(Q1) and 4.28(Q3). 
+
+Next, let's see if this distribution varies for different levels of health. As this is a right-skewed distribution, I will only consider robust statistics(i.e. median, IQR, Q1, Q3) when calculating summary statistics. 
+
+```{r}
+fruit_vege_consumption %>% 
+    group_by(genhlth) %>%  
+    summarise(count=n(),
+      fruit_vege_min = min(fruit_vege_sum), 
+      fruit_vege_IQR = IQR(fruit_vege_sum), 
+      fruit_vege_Q1 = quantile(fruit_vege_sum, 0.25),
+      fruit_vege_median = median(fruit_vege_sum), 
+      fruit_vege_Q3 = quantile(fruit_vege_sum, 0.75),
+      fruit_vege_max = max(fruit_vege_sum))
+```
+
+The median number of fruits/vegetables consumed daily increases with the level of health. Hence, we can say that there is a positive correlation between health and the number of fruits consumed daily.
+
+Let's visualize the relationship using a boxplot. 
+
+```{r}
+ggplot(fruit_vege_consumption, aes(x = genhlth, y = fruit_vege_sum, fill = genhlth)) +
+  geom_boxplot()+ 
+  scale_y_continuous(trans='sqrt')+
+  labs(title ="Relationship between Health and fruit/vegetable consumption", x = "General Health", y="Number of fruits/vegetables per day", fill = "General Health") +
+  scale_fill_brewer(palette = "RdYlGn")
+```
+
+This positive correlation between levels of general health and the number of fruits/vegetables consumed daily could be indicative of any of the following:
+
+1. Eating more fruits/vegetables is better for health (upholding conventional wisdom!)
+2. Better health results in eating more fruits/vegetables (e.g. physically ill people may have limitations to the food they are allowed to consume)
+3. There is one/many confounding variables that affect both health and the number of fruits/vegetables consumed (e.g. income levels could be a confounding factor - let's explore this more in research question 3) 
+
+It is worth noting that the number of people reporting 'Poor' and 'Fair' levels of health are much lower than the other categories. This may either be because: 
+
+1. There are a less number of people with 'Poor' or 'Fair' health levels in the general population
+2. This may signify a non-response sampling bias where people with poorer health did not participate in the survey (e.g. the person was hospitalized during the time of the survey).
+
+### Research Question 3: Is there a relationship between health, income and fruit/vegetable consumption?
+
+#### Analyze data
+
+As a starting point, let's replicate the same analysis in research question 2, comparing income level with fruit/vegetable consumption.
+
+```{r}
+fruit_vege_consumption %>% 
+    group_by(X_incomg) %>%  
+    summarise(count=n(),
+      fruit_vege_min = min(fruit_vege_sum),
+      fruit_vege_IQR = IQR(fruit_vege_sum),
+      fruit_vege_Q1 = quantile(fruit_vege_sum, 0.25),
+      fruit_vege_median = median(fruit_vege_sum), 
+      fruit_vege_Q3 = quantile(fruit_vege_sum, 0.75),
+      fruit_vege_max = max(fruit_vege_sum))
+```
+The median number of fruits/vegetables consumed per day increases from 2.5 in the 'Less than 15K' income group to 3.17 in the '50K or more' income group. 
+
+```{r}
+ggplot(fruit_vege_consumption, aes(x = factor(X_incomg), y = fruit_vege_sum, fill = X_incomg)) +
+  geom_boxplot()+ 
+  scale_y_continuous(trans='sqrt')+
+  scale_fill_brewer(palette = "Greens") +
+  labs(title ="Relationship between income and fruit/vegetable consumption", x = "Income Level", y="Number of fruits/vegetables per day", fill = "Income Level") +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+Similar to the observation with levels of general health, there is a positive correlation between the number of fruits/vegetables consumed per day and income levels. The higher the income, the greater the median number of fruits/vegetables consumed. 
+
+This positive correlation could be indicative of any of the following:
+
+1. Higher income results in eating more fruits/vegetables (e.g. more purchasing power)
+2. Eating more fruits/vegetables gives results in higher income levels (This would make life easier for a lot of parents!)
+3. There is one/many confounding variables that affect both income and the number of fruits/vegetables consumed (e.g. education)
+
+As the final part of this question, let's assess the relationship between income level(categorical), health(categorical) and fruits/vegetables(numerical) consumption by comparing the measures of center and spread by calculating summary statistics and using facet plots.
+
+```{r}
+fruit_vege_consumption %>% 
+    group_by(X_incomg, genhlth) %>%  
+    summarise(count=n(),
+      fruit_vege_min = min(fruit_vege_sum),
+      fruit_vege_IQR = IQR(fruit_vege_sum),
+      fruit_vege_Q1 = quantile(fruit_vege_sum, 0.25),
+      fruit_vege_median = median(fruit_vege_sum), 
+      fruit_vege_Q3 = quantile(fruit_vege_sum, 0.75),
+      fruit_vege_max = max(fruit_vege_sum))
+```
+
+As we're comparing 25 combinations across 2 categorical variables, the amount of summary statistics is high, and both time and not intuitive. Hence, visualization is a more intuitive form of comparison when there is a significant number of combinations and summary statistics to compare.
+
+
+```{r fig.height=4, fig.width = 9}
+ggplot(data = fruit_vege_consumption, aes(x = fruit_vege_sum)) +
+  geom_histogram(binwidth = 1, color="darkgreen", fill="lightgreen") + 
+  labs(title ="Relationship between income, health and fruit/vegetable consumption", x = "Income Level", y="Number of fruits/vegetables consumed per day") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  facet_wrap(~ X_incomg, ncol = 5)
+```
+All income groups have a right-skewed, unimodal distribution. As noted above, the '>50K' income group is nearly twice the size of all other income groups combined, hence there may be an inherent bias in the data.
+
+```{r fig.height=4, fig.width = 9}
+ggplot(fruit_vege_consumption, aes(x = factor(genhlth), y = fruit_vege_sum, fill = genhlth)) +
+  geom_boxplot()+ 
+  scale_y_continuous(trans='sqrt')+
+  scale_fill_brewer(palette = "Greens", guide=FALSE) +
+  labs(title ="Relationship between income, health and fruit/vegetable consumption", x = "Income Level", y="Number of fruits/vegetables consumed per day") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  facet_wrap(~ X_incomg, ncol = 5)
+```
+
+This visualizations shows that: 
+
+* Across all income groups: people with better health eat more more fruits/vegetables than there counterparts with lesser levels of health.
+* People with less income eat less fruits/vegetables as a whole: for example a person earning 'Less than 15K' in 'Excellent' health will eat less fruit/vegetable than someone with 'Excellent' health in the '50K or more' income group. 
+
+
+
+## Summary
+
+Through the results of this analysis, we can generalize(but not establish causation) that for the non-institutionalized American adult population:
+
+1. There is a positive correlation between income and health
+2. There is a positive correlation between health and no of fruit/vegetable consumed per day
+3. There is a positive correlation between income and no of fruit/vegetable consumed per day
+4. People with better health consume more fruits/vegetables across all income groups
+5. People with higher income consume more fruits/vegetables than those of lower income, irrespective of their health condition
+
+In conclusion, we can say that while the relationship between
+
+1. health and fruit/vegetable consumption 
+2. income and fruit/vegetable consumption 
+are positively correlated, these are not stand-alone correlations. 
+
+
+The correlation between these three variables contribute to each other (e.g. there is a positive correlation between income and fruit/vegetable consumption AND people with better health consume more fruit/vegetables) and there may be other confounding variables (e.g. education) that may be confounding variables.
+
+In any case, there needs to be further investigation done to validate establish the contributing factors for the relationship between income, health and fruit/vegetable consumption.
